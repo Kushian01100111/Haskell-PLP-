@@ -1,3 +1,5 @@
+import Data.List (tails)
+
 {-
 Ej1. Considerar las siguientes definiciones de funciones
 I. ¿Cuál es el tipo de cada función?. (Suponer que todos los números  son de tipo Float)
@@ -50,7 +52,6 @@ flipRaro = flip flip
 b puede ser el valor de entrada que recibira el segundo flip ?
 
 -}
-
 {-
     Ejercicio 2
     I. Definir la funcion curry, que dada una funcion de dos argumentos, devuelve su equivalente currificada
@@ -83,6 +84,11 @@ Seria absurdo de realizar una funcion asi, con el desconocimiento en cuantos arg
 foldrr :: (a -> b -> b) -> b -> [a] -> b
 foldrr _ z [] = z
 foldrr f z (x : xs) = f x (foldrr f z xs)
+
+{-
+    f 1 (foldrr f id [2]) [2,3]
+    1 : 2 : llamada recursiva [2] [3]
+-}
 
 sum = foldrr (+) 0
 
@@ -120,4 +126,69 @@ sumaParciales (x:y:xs) = x : sumaParciales (x+y:xs)
 sumasParciales :: (Num a) => [a] -> [a]
 sumasParciales = foldl (\acc x -> acc ++ if null acc then [x] else [x + last acc]) []
 
-{-Consultar en clase porque no entiendo el funcionamiento de foldl-}
+-- IV
+
+sumaAlt :: [Int] -> Int
+sumaAlt = foldrr (\x r -> -r + x) 0
+
+-- V
+sumaAltInv :: [Int] -> Int
+sumaAltInv = foldl (\acc x -> -acc + x) 0
+
+{-
+Ejercicio 4
+I. Definir la funcion permutaciones:: [a] -> [[a]], que dada una lista devuelve todas las permutaciones. Se recomienda utilizar concatMap, y tambien take y drop
+
+-}
+
+{-
+    Ejecicio 5, Considerar las siguientes funciones
+    Indicar si la recurcion de utilizada en cada una de ellas es o no estructural. Si lo es, reescribirla utilizando foldr. En caso contrario, explicar el motivo
+
+-}
+
+elementosEnPosicionesPares :: [a] -> [a]
+elementosEnPosicionesPares [] = []
+elementosEnPosicionesPares (x : xs) =
+  if null xs
+    then [x]
+    else x : elementosEnPosicionesPares (tail xs)
+
+{-
+    NO es una funcion con recurcion estructural, que se hacen varias llamadas a la variable xs sin g(elementosEnPosicionesPares) lo cual es una de la cosas que definen una recursion estructural.
+-}
+
+entrelazar :: [a] -> [a] -> [a]
+entrelazar [] = id
+entrelazar (x : xs) = \ys ->
+  if null ys
+    then x : entrelazar xs []
+    else x : head ys : entrelazar xs (tail ys)
+
+entrelazarr :: [a] -> [a] -> [a]
+entrelazarr = foldrr f id
+  where
+    f x rec = \ys -> case ys of
+      [] -> x : rec []
+      (y : yss) -> x : y : rec yss
+
+{-
+    Ejercicio 6
+    El siguente esquema captura la recursion primitiva sobre listas
+    a. Definir la funcion sacarUna:: Eq a => a -> [a] -> [a], que dados un elemento y una lista devuelve el resultado de eliminar de la lista la primera aparicion del elemento (si esta presente)
+-}
+
+recr :: (a -> [a] -> b -> b) -> b -> [a] -> b
+recr _ z [] = z
+recr f z (x : xs) = f x xs (recr f z xs)
+
+sacarUna x xs =
+  recr
+    ( \x xs rec y ->
+        if x == y && Main.elem y xs
+          then rec xs
+          else x : rec xs
+    )
+    []
+    x
+    xs
