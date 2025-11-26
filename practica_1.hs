@@ -1,4 +1,4 @@
-import Data.List (tails)
+import Data.List (tails, nub)
 
 {-
 Ej1. Considerar las siguientes definiciones de funciones
@@ -100,7 +100,6 @@ elem y = foldrr (\x r -> x == y || r) False
 
 filter fCond = foldrr (\x r -> if fCond x then x else r) []
 
-map cond = foldrr (\x r -> cond x) []
 
 -- II
 
@@ -182,13 +181,291 @@ recr :: (a -> [a] -> b -> b) -> b -> [a] -> b
 recr _ z [] = z
 recr f z (x : xs) = f x xs (recr f z xs)
 
-sacarUna x xs =
-  recr
-    ( \x xs rec y ->
-        if x == y && Main.elem y xs
-          then rec xs
-          else x : rec xs
+
+sacarUna :: Eq a => a -> [a] -> [a]
+sacarUna y =
+  recr (\ x xs rec -> if y == x 
+                      then xs
+                      else x : rec ) []
+
+insertarOrdenado:: Ord a => a -> [a] -> [a]
+insertarOrdenado y =
+  recr (\ x xs rec -> if y <= x  
+                      then y:x:xs
+                      else if x <= y && null xs
+                        then x:y:xs
+                      else x : rec) []
+
+mapPares::(a -> b -> (a, b)) -> [(a,b)] -> [(a,b)]
+mapPares f = foldrr (\ x rec -> case x of 
+                                (xs, xy) -> f xs xy : rec) []  
+
+data Nat = Zero 
+         | Succ Nat
+
+foldNat:: Integer 
+        -> (Integer -> Integer)
+        -> Nat
+        -> Integer
+foldNat fzero fsucc expr = 
+  case expr of
+    Zero -> fzero
+    Succ a -> fsucc (foldNat fzero fsucc a) 
+
+data Polinomio a
+  = X
+  | Cte a
+  | Suma (Polinomio a) (Polinomio a)
+  | Prod (Polinomio a) (Polinomio a)
+  deriving (Show)
+
+foldPoli::  b
+          ->(a -> b)
+          ->(b -> b -> b)
+          ->(b -> b -> b)
+          -> Polinomio a 
+          -> b
+foldPoli x fconst fsuma fprod expr = 
+  case expr of
+    X -> x 
+    Cte a -> fconst a 
+    Suma a b -> fsuma (foldPoli x fconst fsuma fprod a) (foldPoli x fconst fsuma fprod b) 
+    Prod a b -> fprod (foldPoli x fconst fsuma fprod a) (foldPoli x fconst fsuma fprod b)
+
+evaluar :: Num a => a -> Polinomio a -> a 
+evaluar x = foldPoli x id (+) (*)  
+
+
+data AB a = Nil
+          |Bin (AB a) a (AB a)
+
+foldAB:: b -> 
+        (b -> a -> b -> b) 
+        -> AB a 
+        -> b 
+foldAB fnil fbin exprs = 
+  case exprs of 
+    Nil -> fnil
+    (Bin a b c) -> fbin(foldAB fnil fbin a) b (foldAB fnil fbin c)
+
+
+recrAB :: b ->
+          (b -> AB a -> a -> b -> AB a -> b)
+          -> AB a 
+          -> b
+recrAB fnil fbin exprs = 
+  case exprs of 
+    Nil -> fnil
+    (Bin a b c) -> fbin (recrAB fnil fbin a) a b (recrAB fnil fbin c) c
+
+
+altura:: AB a -> Integer
+altura = foldAB 0 (\b a c -> 1 + max b c)
+
+cantNodos:: AB a -> Integer
+cantNodos = foldAB 0 (\b a c -> 1 + b + c) 
+
+
+mejorSegunAB::(a -> a -> Bool) -> AB a -> a 
+mejorSegunAB fcond = recrAB (error "Nil") (\ri i r rd d -> comparacion fcond (comparacion fcond r ri i) rd d) 
+
+comparacion:: (a -> a -> Bool) -> a -> a  -> AB a -> a
+comparacion fcond r i rec = 
+  case rec of 
+    Nil -> r
+    _ -> if fcond r i then r else i 
+
+
+raiz:: AB a -> a 
+raiz (Bin a r b) = r 
+
+esABB:: Ord a => AB a -> Bool 
+esABB = recrAB True (\ri i r rd d -> (r >= (raiz i)) && (r < (raiz d)) && (ri && rd))
+
+{-
+actualizarElem :: Int -> (a -> a) -> [a] -> [a]
+actualizarElem n f xs = actualizarElem' f xs n
+
+
+actualizarElem' :: (a -> a) -> [a] -> Int -> [a]
+actualizarElem' f = foldr (\ x rec i -> if i == 0 then f x rec (i-1)
+                                        else x  : rec (i-1)) (const [])
+-}
+
+comienzoDeIntervalos i n t=  -(1/0) : (Prelude.map (\x -> i + x*t))  [0..n-2]
+finesDeIntervalos i n t  = (Prelude.map (\x -> (i + x*t) - 1))  [0..n-2] ++ [(1/0)]
+
+
+{-
+
+
+
+data FS = Arch String |  Dir String [FS] deriving (Eq, Show)
+
+foldFS:: (String -> a) ->
+         (String -> [a] -> a ) ->
+          FS -> 
+          a
+foldFS fArc fDir fs = 
+    case fs of 
+      Arch a -> fArc a 
+      Dir a xs -> fDir a (map (foldFS fArc fDir) xs) 
+
+
+recrFS::(String -> a) ->
+        (String -> [FS] -> [a] -> a) ->
+        FS -> 
+        a 
+recrFS gArc gDir  fs = 
+    case fs of 
+      Arch a -> gArc a 
+      Dir a xs -> gDir a xs (map (recrFS gArc gDir) xs)
+
+
+rutas exprs = foldFS (:[]) (\ s rec -> map (\m -> s++"/"++m) (concat rec))
+
+--valido:: FS -> Bool
+--valido fs = rutas fs == nub (rutas fs)
+-}
+
+data LineaProd = Materiales [String] | Agregar String LineaProd| Unir LineaProd LineaProd
+
+foldLP::([String] -> a) -> 
+        (String -> a -> a) -> 
+        (a -> a -> a ) -> 
+        LineaProd -> 
+        a
+foldLP fMat fAgre fUni expre = 
+  case expre of 
+    Materiales xs -> fMat xs
+    Agregar s prod -> fAgre s (foldLP fMat fAgre fUni prod)
+    Unir prod1 prod2 -> fUni (foldLP fMat fAgre fUni prod1) (foldLP fMat fAgre fUni prod2)
+
+
+recrLP::([String] -> a) -> 
+        (String -> LineaProd -> a -> a) -> 
+        (a -> LineaProd -> a -> LineaProd -> a) -> 
+        LineaProd -> 
+        a
+recrLP gMat gAgre gUni expre = 
+  case expre of 
+    Materiales xs -> gMat xs
+    Agregar s prod -> gAgre s prod (recrLP gMat gAgre gUni prod)
+    Unir prod1 prod2 -> gUni (recrLP gMat gAgre gUni prod1) prod1 (recrLP gMat gAgre gUni prod2) prod2
+
+{- l1 = unir
+        (Materiales [])
+        (Unir ) -}
+materialesUsados:: LineaProd -> [String] 
+materialesUsados expr = nub (foldLP (id) (:) (++) expr)
+
+
+sublineasDisjuntas:: LineaProd -> Bool 
+sublineasDisjuntas expr = recrLP (\_ -> True) (\_ _ rec-> rec)  (\i prod1 d prod2 ->
+      if i && d 
+        then (materialesUsados prod1)++(materialesUsados prod2) == nub((materialesUsados prod1)++(materialesUsados prod2))
+        else False
+        ) expr
+
+estructura::LineaProd -> [String] 
+estructura expr = foldLP 
+  (\ _ -> ["Material"]) 
+  (\_ rec -> "Agregar":rec) 
+  (\ri rd -> ("Unir":ri)++("Unir":rd) ) 
+  expr
+
+mismaEstructura:: LineaProd -> LineaProd -> Bool
+mismaEstructura expr1 expr2  = (estructura expr1) == (estructura expr2)
+
+
+l1::LineaProd
+l1 =
+  Unir
+    (Materiales ["acero", "cobre"])
+    (Unir
+      (Agregar "madera" (Materiales ["madera"]))
+      (Materiales ["mercurio"])
     )
-    []
-    x
-    xs
+
+l2 :: LineaProd
+l2 =
+  Unir
+    (Materiales ["acero", "cobre"])
+    (Unir
+      (Agregar "madera"   (Materiales ["aluminio"]))
+      (Agregar "aluminio" (Materiales ["plástico"]))
+    )
+
+l3 :: LineaProd
+l3 =
+  Unir
+    (Materiales ["m1"])
+    (Unir
+      (Agregar "m3" (Materiales ["m3", "m4"]))
+      (Materiales ["m1", "m2"])
+    )
+
+
+data ABNV a = Hoja a | Uni a (ABNV a) | Bi (ABNV a)  a (ABNV a) deriving (Eq, Show)
+
+foldABNV:: (b -> a ) ->
+           (b -> a -> a) -> 
+           (a -> b -> a -> a) ->
+            ABNV b ->
+            a  
+foldABNV fHoja fUni fBi expre = 
+  case expre of 
+    Hoja r -> fHoja r 
+    Uni r rec -> fUni r (foldABNV fHoja fUni fBi rec)
+    Bi recA r recB -> fBi (foldABNV fHoja fUni fBi recA) r (foldABNV fHoja fUni fBi recB)
+
+
+recrABNV:: (b -> a ) ->
+           (b -> ABNV b -> a -> a) -> 
+           (a -> ABNV b -> b -> a -> ABNV b  -> a) ->
+            ABNV b ->
+            a  
+recrABNV fHoja fUni fBi expre = 
+  case expre of 
+    Hoja r -> fHoja r 
+    Uni r rec -> fUni r rec (recrABNV fHoja fUni fBi rec) 
+    Bi recA r recB -> fBi (recrABNV fHoja fUni fBi recA) recA r (recrABNV fHoja fUni fBi recB) recB
+
+
+elemABNV:: Eq a => a -> ABNV a -> Bool 
+elemABNV elem expre = foldABNV 
+  (== elem) 
+  (\r rec -> if rec then True else r == elem ) 
+  (\recI r recD -> if recI || recD then True else r == elem) 
+  expre 
+
+reemplazarUno:: Eq a => a -> a -> ABNV a -> ABNV a 
+reemplazarUno prev sub arbol = recrABNV 
+  (\r -> if r == prev then Hoja sub else Hoja r)
+  (\r ab rec -> if r == prev then Uni sub ab else Uni r rec )
+  (\recI abI r recD abD -> 
+    if r == prev 
+      then Bi abI sub abD
+      else if elemABNV prev abI
+        then Bi recI r abD
+      else if elemABNV prev abD
+        then Bi abI r recD
+      else Bi abI r abD
+    ) arbol
+
+
+nivel:: ABNV a -> Int -> [a] 
+nivel = foldABNV 
+  (\r n -> if n == 0 then [r] else [])
+  (\r rec n -> if n == 0 then [r] else rec (n-1))
+  (\recI r recD n -> if n == 0 then [r] else (recI (n-1))++(recD (n-1)))
+
+abnv:: ABNV Int
+abnv =
+  Bi
+    (Uni 3 (Hoja 1))
+    3
+    (Bi
+      (Hoja 2)
+      5
+      (Uni 2 (Hoja 7)))
